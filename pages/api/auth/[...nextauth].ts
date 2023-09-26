@@ -1,63 +1,74 @@
 import NextAuth, { NextAuthOptions } from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
-import FacebookProvider from "next-auth/providers/facebook"
-import GithubProvider from "next-auth/providers/github"
-import TwitterProvider from "next-auth/providers/twitter"
-import Auth0Provider from "next-auth/providers/auth0"
-// import AppleProvider from "next-auth/providers/apple"
-// import EmailProvider from "next-auth/providers/email"
+import CredentialsProvider from "next-auth/providers/credentials"
+import { nanoid } from 'nanoid'
 
 // For more information on each option (and a full list of options) go to
 // https://next-auth.js.org/configuration/options
 export const authOptions: NextAuthOptions = {
   // https://next-auth.js.org/configuration/providers/oauth
   providers: [
-    /* EmailProvider({
-         server: process.env.EMAIL_SERVER,
-         from: process.env.EMAIL_FROM,
-       }),
-    // Temporarily removing the Apple provider from the demo site as the
-    // callback URL for it needs updating due to Vercel changing domains
-
-    Providers.Apple({
-      clientId: process.env.APPLE_ID,
-      clientSecret: {
-        appleId: process.env.APPLE_ID,
-        teamId: process.env.APPLE_TEAM_ID,
-        privateKey: process.env.APPLE_PRIVATE_KEY,
-        keyId: process.env.APPLE_KEY_ID,
+    CredentialsProvider({
+      // The name to display on the sign in form (e.g. 'Sign in with...')
+      name: 'OpenAi',
+      // The credentials is used to generate a suitable form on the sign in page.
+      // You can specify whatever fields you are expecting to be submitted.
+      // e.g. domain, username, password, 2FA token, etc.
+      // You can pass any HTML attribute to the <input> tag through the object.
+      credentials: {
+        apikey: { label: "OpenAi API Key", type: "text" }
       },
-    }),
-    */
-    FacebookProvider({
-      clientId: process.env.FACEBOOK_ID,
-      clientSecret: process.env.FACEBOOK_SECRET,
-    }),
-    GithubProvider({
-      clientId: process.env.GITHUB_ID,
-      clientSecret: process.env.GITHUB_SECRET,
-    }),
-    GoogleProvider({
-      clientId: process.env.GOOGLE_ID,
-      clientSecret: process.env.GOOGLE_SECRET,
-    }),
-    TwitterProvider({
-      clientId: process.env.TWITTER_ID,
-      clientSecret: process.env.TWITTER_SECRET,
-    }),
-    Auth0Provider({
-      clientId: process.env.AUTH0_ID,
-      clientSecret: process.env.AUTH0_SECRET,
-      issuer: process.env.AUTH0_ISSUER,
-    }),
+      async authorize(credentials, req) {
+        console.log("authorize()", credentials);
+
+        const response = await fetch('https://api.openai.com/v1/models', {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${credentials?.apikey}`,
+          }
+        });
+        //console.log("https://api.openai.com response", response);
+        console.log("https://api.openai.com response.statusText", response.statusText);
+        console.log("https://api.openai.com response.status", response.status);
+      
+        if (response.status === 200) {
+          // API key is valid, proceed with login
+          console.log("OpenAI API key is valid");
+          const user = { 
+            id: nanoid(), 
+            apikey: credentials?.apikey || null
+          }
+          return user;
+        } else {
+          // API key is invalid, handle error
+          console.log("Invalid OpenAI API Key");
+          return null
+        }
+      }
+    })
   ],
   theme: {
     colorScheme: "light",
   },
+  session: {
+    strategy: 'jwt',
+  },
   callbacks: {
-    async jwt({ token }) {
-      token.userRole = "admin"
-      return token
+    async jwt({token, user}) {
+      console.log("callback jwt token", token);
+      console.log("callback jwt user", user);
+      if (user) {
+        token.apikey = user.apikey as string | undefined;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      session.user = {
+        apikey: token.apikey ? token.apikey as string : null,
+      };
+      session.user.apikey = session.user.apikey || null; 
+      session.expires = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(); // Set the expiry date to 7 days from now
+      return session;
     },
   },
 }

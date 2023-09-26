@@ -1,3 +1,4 @@
+// pages/server.tsx
 import { getServerSession } from "next-auth/next"
 import { authOptions } from "./api/auth/[...nextauth]"
 import Layout from "../components/layout"
@@ -35,9 +36,11 @@ export default function ServerSidePage({ session }: { session: Session }) {
 
 // Export the `session` prop to use sessions with Server Side Rendering
 export async function getServerSideProps(context: GetServerSidePropsContext) {
+  const session = await getServerSession(context.req, context.res, authOptions);
+  console.log("Session:", session);
   return {
     props: {
-      session: await getServerSession(context.req, context.res, authOptions),
+      session,
     },
-  }
+  };
 }
